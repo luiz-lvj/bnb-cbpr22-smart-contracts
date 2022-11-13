@@ -1,21 +1,17 @@
 // SPDX-License-Identifier: ULINCENSED
 pragma solidity ^0.8.0;
 
-enum MedicalArea {
-    Heart
-}
-
 struct Consulta {
     bool exists;
 
     string area;
-    string specification;
+    string especificacao;
 
     address hospital;
-    address doctor;
+    address medico;
     address paciente;
     
-    uint epochDate;
+    uint epochTime;
     string laudo;
 
     uint[] exames;
@@ -29,7 +25,7 @@ struct Exame {
     address hospital;
     address paciente;
 
-    uint epochDate;
+    uint epochTime;
     string laudo;
 
     uint consulta;
@@ -38,8 +34,8 @@ struct Exame {
 contract MedicalData {
     address hospital;
 
-    modifier onlyHospital {
-        require(msg.sender == hospital, "Sender is not hospital");
+    modifier somenteHospital {
+        require(msg.sender == hospital, "Acionador nao eh hospital");
         _;
     }
 
@@ -51,48 +47,68 @@ contract MedicalData {
     mapping (address => uint[]) consultasPaciente;
     mapping (address => mapping(address => uint[])) consultasMedicoPaciente;
 
+    mapping (address => bool) pacientesMap;
+    address[] pacientes;
+
     mapping (uint => Exame) public exames;
     mapping (address => uint[]) examesAvulsos;
 
+    function _insertPaciente(address paciente)
+    internal {
+        if(pacientesMap[paciente]) return;
+
+        pacientesMap[paciente] = true;
+        pacientes.push(paciente);
+    }
+
     function postColsulta(
-        uint externKey,
+        uint IDconsulta,
         string calldata area,
-        string calldata specification,
-        address doctor,
+        string calldata especificacao,
+        address medico,
         address paciente,
-        uint epochDate,
+        uint epochTime,
         string calldata laudo
-    ) external onlyHospital {
-        Consulta storage consulta = consultas[externKey];
+    ) external somenteHospital {
+        require(IDconsulta != 0, "ID consulta nao pode ser 0");
+        require(medico != address(0), "Indereco invalido: medico");
+        require(paciente != address(0), "Indereco invalido: paciente");
+
+        Consulta storage consulta = consultas[IDconsulta];
         require(!consulta.exists, "Consulta ja existente");
 
         consulta.exists = true;
         consulta.area = area;
-        consulta.specification = specification;
-        consulta.doctor = doctor;
+        consulta.especificacao = especificacao;
+        consulta.medico = medico;
         consulta.paciente = paciente;
-        consulta.hospital = hospital;
+        consulta.hospital = msg.sender;
 
         // maybe add some time verification
-        consulta.epochDate = epochDate;
+        consulta.epochTime = epochTime;
         consulta.laudo = laudo;
 
-        consultasPaciente[paciente].push(externKey);
-        consultasMedicoPaciente[doctor][paciente].push(externKey);
+        consultasPaciente[paciente].push(IDconsulta);
+        consultasMedicoPaciente[medico][paciente].push(IDconsulta);
+
+        _insertPaciente(paciente);
     }
 
     function postExame (
-        uint externKey,
+        uint IDexame,
         string calldata nome,
 
         address paciente,
 
         string calldata laudo,
-        uint epochDate,
+        uint epochTime,
 
         uint consulta
-    ) external onlyHospital {
-        Exame storage exame = exames[externKey];
+    ) external somenteHospital {
+        require(paciente != address(0), "Endereco invalido: paciente");
+        require(consulta == 0 || consultas[consulta].paciente == paciente, "Consulta e examos nao sao do mesmo paciente");
+
+        Exame storage exame = exames[IDexame];
         require(!exame.exists, "Exame ja existe");
 
         exame.exists = true;
@@ -102,12 +118,12 @@ contract MedicalData {
         exame.hospital = hospital;
 
         exame.laudo = laudo;
-        exame.epochDate = epochDate;
+        exame.epochTime = epochTime;
 
         exame.consulta = consulta;
         
-        if(consulta != 0) consultas[consulta].exames.push(externKey);
-        else examesAvulsos[paciente].push(externKey);
+        if(consulta != 0) consultas[consulta].exames.push(IDexame);
+        else examesAvulsos[paciente].push(IDexame);
     }
 
     function getConsultasPaciente (address paciente)
@@ -118,5 +134,10 @@ contract MedicalData {
     function getConsultasMedicoPaciente (address medico, address paciente)
     external view returns (uint[] memory) {
         return consultasMedicoPaciente[medico][paciente];
+    }
+
+    function getPacientes()
+    external view returns (address[] memory) {
+        return pacientes;
     }
 }
