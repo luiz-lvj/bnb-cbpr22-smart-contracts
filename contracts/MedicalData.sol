@@ -225,14 +225,33 @@ contract MedicalData {
         return consultas[IDconsulta];
     }
 
-    function getConsultasPaciente (address paciente)
+    function getIDConsultasPaciente(address paciente)
     external view returns (uint[] memory) {
         return consultasPaciente[paciente];
     }
 
-    function getConsultasMedicoPaciente (address medico, address paciente)
+    function _queryIDconsultas(uint[] memory ids)
+    internal view returns (Consulta[] memory) {
+        Consulta[] memory _consultas = new Consulta[](ids.length);
+        for(uint i=0; i<ids.length; i++)
+            _consultas[i] = consultas[ids[i]];
+
+        return _consultas;
+    }
+
+    function getConsultasPaciente(address paciente)
+    public view returns (Consulta[] memory) {
+        return _queryIDconsultas(consultasPaciente[paciente]);
+    }
+
+    function getIDConsultasMedicoPaciente(address medico, address paciente)
     external view returns (uint[] memory) {
         return consultasMedicoPaciente[medico][paciente];
+    }
+
+    function getConsultasMedicoPaciente(address medico, address paciente)
+    external view returns (Consulta[] memory) {
+        return _queryIDconsultas(consultasMedicoPaciente[medico][paciente]);
     }
 
     function getPacientes()
@@ -240,24 +259,27 @@ contract MedicalData {
         return pacientes;
     }
 
-    function getExamesPaciente(address paciente) 
+    function _queryIDexame(uint[] memory ids)
+    internal view returns (Exame[] memory) {
+        Exame[] memory _exames = new Exame[](ids.length);
+        for(uint i=0; i<ids.length; i++)
+            _exames[i] = exames[ids[i]];
+
+        return _exames;
+    }
+
+    function getIDExamesPaciente(address paciente) 
     external view returns (uint[] memory) {
         return examesPaciente[paciente];
     }
 
+    function getExamesPaciente(address paciente)
+    public view returns (Exame[] memory) {
+        return _queryIDexame(examesPaciente[paciente]);
+    }
+
     function getHistory(address paciente)
     external view returns (Consulta[] memory, Exame[] memory) {
-        uint[] storage IDsConsultas = consultasPaciente[paciente];
-        Consulta[] memory _consultas = new Consulta[](IDsConsultas.length);
-
-        for(uint i=0; i<IDsConsultas.length; i++)
-            _consultas[i] = consultas[IDsConsultas[i]];
-
-        uint[] storage IDsExames = examesPaciente[paciente];
-        Exame[] memory _exames = new Exame[](IDsExames.length);
-        for(uint i=0; i<IDsExames.length; i++)
-            _exames[i] = exames[IDsExames[i]];
-
-        return (_consultas, _exames);
+        return (getConsultasPaciente(paciente), getExamesPaciente(paciente));
     }
 }
