@@ -1,13 +1,9 @@
-# Sample Hardhat Project
+# Smart contract repository
 
-This project demonstrates a basic Hardhat use case. It comes with a sample contract, a test for that contract, and a script that deploys that contract.
+This is an template repository for hardhat
 
-Try running some of the following tasks:
+setup: npm install
 
-```shell
-npx hardhat help
-npx hardhat test
-REPORT_GAS=true npx hardhat test
-npx hardhat node
-npx hardhat run scripts/deploy.js
-```
+compile: npx hardhat compile
+
+test: npx hardhat test
