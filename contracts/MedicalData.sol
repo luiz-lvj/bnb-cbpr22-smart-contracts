@@ -32,7 +32,17 @@ struct Exame {
 }
 
 contract MedicalData {
-    address hospital;
+    address public hospital;
+
+    mapping (uint => Consulta) consultas;
+    mapping (address => uint[]) consultasPaciente;
+    mapping (address => mapping(address => uint[])) consultasMedicoPaciente;
+
+    mapping (address => bool) pacientesMap;
+    address[] pacientes;
+
+    mapping (uint => Exame) public exames;
+    mapping (address => uint[]) examesPaciente;
 
     modifier somenteHospital {
         require(msg.sender == hospital, "Acionador nao eh hospital");
@@ -43,16 +53,6 @@ contract MedicalData {
         hospital = msg.sender;
     }
 
-    mapping (uint => Consulta) public consultas;
-    mapping (address => uint[]) consultasPaciente;
-    mapping (address => mapping(address => uint[])) consultasMedicoPaciente;
-
-    mapping (address => bool) pacientesMap;
-    address[] pacientes;
-
-    mapping (uint => Exame) public exames;
-    mapping (address => uint[]) examesAvulsos;
-
     function _insertPaciente(address paciente)
     internal {
         if(pacientesMap[paciente]) return;
@@ -61,7 +61,7 @@ contract MedicalData {
         pacientes.push(paciente);
     }
 
-    function postColsulta(
+    function postConsulta(
         uint IDconsulta,
         string calldata area,
         string calldata especificacao,
@@ -123,7 +123,14 @@ contract MedicalData {
         exame.consulta = consulta;
         
         if(consulta != 0) consultas[consulta].exames.push(IDexame);
-        else examesAvulsos[paciente].push(IDexame);
+        examesPaciente[paciente].push(IDexame);
+
+        _insertPaciente(paciente);
+    }
+
+    function getConsulta(uint IDconsulta)
+    external view returns (Consulta memory) {
+        return consultas[IDconsulta];
     }
 
     function getConsultasPaciente (address paciente)
@@ -139,5 +146,26 @@ contract MedicalData {
     function getPacientes()
     external view returns (address[] memory) {
         return pacientes;
+    }
+
+    function getExamesPaciente(address paciente) 
+    external view returns (uint[] memory) {
+        return examesPaciente[paciente];
+    }
+
+    function getHistory(address paciente)
+    external view returns (Consulta[] memory, Exame[] memory) {
+        uint[] storage IDsConsultas = consultasPaciente[paciente];
+        Consulta[] memory _consultas = new Consulta[](IDsConsultas.length);
+
+        for(uint i=0; i<IDsConsultas.length; i++)
+            _consultas[i] = consultas[IDsConsultas[i]];
+
+        uint[] storage IDsExames = examesPaciente[paciente];
+        Exame[] memory _exames = new Exame[](IDsExames.length);
+        for(uint i=0; i<IDsExames.length; i++)
+            _exames[i] = exames[IDsExames[i]];
+
+        return (_consultas, _exames);
     }
 }
