@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 
 struct Consulta {
     bool exists;
+    uint IDconsulta;
 
     string area;
     string especificacao;
@@ -14,11 +15,12 @@ struct Consulta {
     uint epochTime;
     string laudo;
 
-    uint[] exames;
+    uint[] IDexames;
 }
 
 struct Exame {
     bool exists;
+    uint IDexame;
 
     string nome;
 
@@ -28,7 +30,7 @@ struct Exame {
     uint epochTime;
     string laudo;
 
-    uint consulta;
+    uint IDconsulta;
 }
 
 contract MedicalData {
@@ -61,6 +63,42 @@ contract MedicalData {
         pacientes.push(paciente);
     }
 
+    function _postConsulta(
+        uint IDconsulta,
+        string calldata area,
+        string calldata especificacao,
+        address _hospital,
+        address medico,
+        address paciente,
+        uint epochTime,
+        string calldata laudo
+    ) internal {
+        require(IDconsulta != 0, "ID consulta nao pode ser 0");
+        require(medico != address(0), "Indereco invalido: medico");
+        require(paciente != address(0), "Indereco invalido: paciente");
+
+        Consulta storage consulta = consultas[IDconsulta];
+        require(!consulta.exists, "Consulta ja existente");
+
+        consulta.exists = true;
+        consulta.IDconsulta = IDconsulta;
+
+        consulta.area = area;
+        consulta.especificacao = especificacao;
+
+        consulta.hospital = _hospital;
+        consulta.medico = medico;
+        consulta.paciente = paciente;
+
+        consulta.epochTime = epochTime;
+        consulta.laudo = laudo;
+
+        consultasPaciente[paciente].push(IDconsulta);
+        consultasMedicoPaciente[medico][paciente].push(IDconsulta);
+
+        _insertPaciente(paciente);
+    }
+
     function postConsulta(
         uint IDconsulta,
         string calldata area,
@@ -70,26 +108,49 @@ contract MedicalData {
         uint epochTime,
         string calldata laudo
     ) external somenteHospital {
-        require(IDconsulta != 0, "ID consulta nao pode ser 0");
-        require(medico != address(0), "Indereco invalido: medico");
-        require(paciente != address(0), "Indereco invalido: paciente");
+        _postConsulta(
+            IDconsulta,
+            area,
+            especificacao,
+            msg.sender,
+            medico,
+            paciente,
+            epochTime,
+            laudo
+        );
+    }
 
-        Consulta storage consulta = consultas[IDconsulta];
-        require(!consulta.exists, "Consulta ja existente");
+    function _postExame (
+        uint IDexame,
+        string calldata nome,
 
-        consulta.exists = true;
-        consulta.area = area;
-        consulta.especificacao = especificacao;
-        consulta.medico = medico;
-        consulta.paciente = paciente;
-        consulta.hospital = msg.sender;
+        address paciente,
 
-        // maybe add some time verification
-        consulta.epochTime = epochTime;
-        consulta.laudo = laudo;
+        string calldata laudo,
+        uint epochTime,
 
-        consultasPaciente[paciente].push(IDconsulta);
-        consultasMedicoPaciente[medico][paciente].push(IDconsulta);
+        uint IDconsulta
+    ) internal {
+        require(paciente != address(0), "Endereco invalido: paciente");
+        require(IDconsulta == 0 || consultas[IDconsulta].paciente == paciente, "Consulta e examos nao sao do mesmo paciente");
+
+        Exame storage exame = exames[IDexame];
+        require(!exame.exists, "Exame ja existe");
+
+        exame.exists = true;
+        exame.IDexame = IDexame;
+        exame.nome = nome;
+
+        exame.paciente = paciente;
+        exame.hospital = hospital;
+
+        exame.laudo = laudo;
+        exame.epochTime = epochTime;
+
+        exame.IDconsulta = IDconsulta;
+        
+        if(IDconsulta != 0) consultas[IDconsulta].IDexames.push(IDexame);
+        examesPaciente[paciente].push(IDexame);
 
         _insertPaciente(paciente);
     }
@@ -105,27 +166,58 @@ contract MedicalData {
 
         uint consulta
     ) external somenteHospital {
-        require(paciente != address(0), "Endereco invalido: paciente");
-        require(consulta == 0 || consultas[consulta].paciente == paciente, "Consulta e examos nao sao do mesmo paciente");
+        _postExame(
+            IDexame,
+            nome,
+            paciente,
+            laudo,
+            epochTime,
+            consulta
+        );
+    }
 
-        Exame storage exame = exames[IDexame];
-        require(!exame.exists, "Exame ja existe");
+    function convertID(address _hospital, uint ID)
+    internal pure returns (uint) {
+        return uint(keccak256(abi.encode(_hospital,ID)));
+    }
 
-        exame.exists = true;
-        exame.nome = nome;
+    function importHistory(Consulta[] calldata _consultas, Exame[] calldata _exames)
+    external somenteHospital {
+        for(uint i=0; i<_consultas.length; i++){
+            Consulta calldata _consulta = _consultas[i];
+            address _hospital = _consulta.hospital;
+            uint _IDconsulta_bef = _consulta.IDconsulta;
+            uint _IDconsulta_new = convertID(_hospital, _IDconsulta_bef);
 
-        exame.paciente = paciente;
-        exame.hospital = hospital;
+            _postConsulta(
+                _IDconsulta_new,
+                _consulta.area,
+                _consulta.especificacao,
+                _consulta.hospital,
+                _consulta.medico,
+                _consulta.paciente,
+                _consulta.epochTime,
+                _consulta.laudo
+            );
+        }
 
-        exame.laudo = laudo;
-        exame.epochTime = epochTime;
+        for(uint i=0; i<_exames.length; i++) {
+            Exame calldata _exame = _exames[i];
+            address _hospital = _exame.hospital;
+            uint _ID_exame_bef = _exame.IDexame;
+            uint _ID_exame_new = convertID(_hospital,_ID_exame_bef);
 
-        exame.consulta = consulta;
-        
-        if(consulta != 0) consultas[consulta].exames.push(IDexame);
-        examesPaciente[paciente].push(IDexame);
+            uint _ID_consulta = _exame.IDconsulta == 0 ? 0 : convertID(_hospital, _exame.IDconsulta);
 
-        _insertPaciente(paciente);
+            _postExame(
+                _ID_exame_new,
+                _exame.nome,
+                _exame.paciente,
+                _exame.laudo,
+                _exame.epochTime,
+                _ID_consulta
+            );
+        }
     }
 
     function getConsulta(uint IDconsulta)
